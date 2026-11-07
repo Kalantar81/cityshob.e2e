@@ -1,0 +1,5 @@
+{
+  "_comment": "Valid reference-data ids per environment for seedEvent(); fill in from a UI-created event (POST /api/v1/events payload).",
+  "staging": null,
+  "local": null
+}

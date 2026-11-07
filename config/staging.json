@@ -1,0 +1,11 @@
+{
+  "baseUrl": "https://staging.citylab.local",
+  "apiUrl": "https://staging.citylab.local/api/v1",
+  "defaultCommandTimeout": 15000,
+  "pageLoadTimeout": 90000,
+  "requestTimeout": 15000,
+  "responseTimeout": 45000,
+  "flags": {
+    "isLocal": false
+  }
+}

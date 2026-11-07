@@ -1,0 +1,42 @@
+{
+  "name": "cityshob-e2e",
+  "version": "1.0.0",
+  "description": "E2E tests (Cypress + Cucumber) for cityshob webclient",
+  "scripts": {
+    "cy:open": "cypress open",
+    "cy:run": "cypress run",
+    "e2e:open:local": "cypress open --e2e --env environment=local",
+    "e2e:open:project": "cypress open --e2e --env environment=project",
+    "e2e:run:local": "cypress run --env environment=local",
+    "e2e:run:project": "cypress run --env environment=project",
+    "e2e:smoke:local": "cypress run --env environment=local --expose tags=@smoke",
+    "e2e:smoke:project": "cypress run --env environment=project --expose tags=@smoke",
+    "e2e:open:dev3": "cypress open --e2e --env environment=dev3",
+    "e2e:run:dev3": "cypress run --env environment=dev3",
+    "e2e:smoke:dev3": "cypress run --env environment=dev3 --expose tags=@smoke",
+    "e2e:open:staging": "cypress open --e2e --env environment=staging",
+    "e2e:run:staging": "cypress run --env environment=staging",
+    "e2e:smoke:staging": "cypress run --env environment=staging --expose tags=@smoke",
+    "cy:local": "cypress run --env environment=local",
+    "cy:project": "cypress run --env environment=project",
+    "cy:dev3": "cypress run --env environment=dev3",
+    "cy:staging": "cypress run --env environment=staging",
+    "cy-open:staging": "cypress open --e2e --env environment=staging",
+    "e2e:all": "node scripts/e2e.js run staging",
+    "e2e:all:local": "node scripts/e2e.js run local",
+    "e2e:all:dev3": "node scripts/e2e.js run dev3"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "devDependencies": {
+    "@badeball/cypress-cucumber-preprocessor": "^28.0.1",
+    "@bahmutov/cypress-esbuild-preprocessor": "^2.2.8",
+    "@types/node": "^26.6.6",
+    "cross-env": "^10.1.0",
+    "cypress": "^16.2.1",
+    "esbuild": "^0.28.2",
+    "typescript": "~5.9"
+  },
+  "private": true
+}

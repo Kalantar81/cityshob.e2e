@@ -1,0 +1,48 @@
+{
+  "version": "2.0.0",
+  "inputs": [
+    {
+      "id": "environment",
+      "type": "pickString",
+      "description": "Environment",
+      "options": ["staging", "local", "dev3", "project"],
+      "default": "staging"
+    }
+  ],
+  "tasks": [
+    {
+      "label": "E2E: run all tests",
+      "detail": "All features, headless, on the chosen environment",
+      "type": "shell",
+      "command": "node scripts/e2e.js run ${input:environment}",
+      "group": { "kind": "test", "isDefault": true },
+      "problemMatcher": [],
+      "presentation": { "reveal": "always", "panel": "dedicated", "clear": true }
+    },
+    {
+      "label": "E2E: run smoke tests",
+      "detail": "Only @smoke, headless",
+      "type": "shell",
+      "command": "node scripts/e2e.js run ${input:environment} @smoke",
+      "group": "test",
+      "problemMatcher": [],
+      "presentation": { "reveal": "always", "panel": "dedicated", "clear": true }
+    },
+    {
+      "label": "E2E: open Cypress runner",
+      "detail": "Interactive Cypress app",
+      "type": "shell",
+      "command": "node scripts/e2e.js open ${input:environment}",
+      "group": "test",
+      "problemMatcher": [],
+      "presentation": { "reveal": "always", "panel": "dedicated" }
+    },
+    {
+      "label": "E2E: open last HTML report",
+      "type": "shell",
+      "command": "start reports/cucumber-report.html",
+      "windows": { "command": "start reports/cucumber-report.html" },
+      "problemMatcher": []
+    }
+  ]
+}

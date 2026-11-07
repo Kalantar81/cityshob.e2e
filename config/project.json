@@ -1,0 +1,11 @@
+{
+  "baseUrl": "https://CHANGE-ME.example",
+  "apiUrl": "https://CHANGE-ME.example/api/v1",
+  "defaultCommandTimeout": 15000,
+  "pageLoadTimeout": 90000,
+  "requestTimeout": 15000,
+  "responseTimeout": 45000,
+  "flags": {
+    "isLocal": false
+  }
+}
