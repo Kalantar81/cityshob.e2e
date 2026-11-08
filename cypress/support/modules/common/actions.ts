@@ -4,7 +4,22 @@ import { Navigation } from "./pages/Navigation";
 import { WidgetWizard } from "./pages/WidgetWizard";
 import { WidgetArea, emptyAreaSelector, widgetAreaSelector } from "./pages/WidgetArea";
 import { confirmDialog } from "./pages/Ui";
-import { aliases, createWorkspace, deleteWorkspace, interceptCommon, apiUrl, getAccessToken, waitForLayoutPersisted } from "./api";
+import * as selectors from "./selectors";
+import {
+  APP_STORAGE_KEY,
+  AUTH_SESSION_KEY,
+  aliases,
+  createWorkspace,
+  deleteWorkspace,
+  interceptCommon,
+  findAccessToken,
+  getAccessToken,
+  getAuthTokens,
+  readAppState,
+  tokenAliveStatus,
+  waitForLayoutPersisted,
+} from "./api";
+import type { AuthTokens } from "./api";
 import { cleanup } from "./cleanup";
 import { WIDGETS } from "./types";
 import type { Credentials, Done, Layout, WidgetConfig, WidgetHandle, WidgetSize, WidgetType, Workspace } from "./types";
@@ -80,33 +95,182 @@ export function login(role: string): Done {
 }
 
 
-/** Session is valid while the BFF still accepts the stored token (one session per user). */
+/**
+ * Session is valid while the BFF still accepts the stored token (one session per user). A logout
+ * revokes every token of the user, so a cached session restored after it fails here and cy.session
+ * runs the login again. Fails fast (no retry on the status) so that recreation is not delayed.
+ */
 export function validateSession(): Done {
   return getAccessToken()
-    .then((token) =>
-      cy
-        .request({ method: "HEAD", url: apiUrl("auth/token/alive"), headers: { Authorization: `Bearer ${token}` }, log: false })
-        .its("status")
-        .should("eq", 200),
-    )
-    .then(() => cy.wrap(null, { log: false }));
+    .then((token) => tokenAliveStatus(token))
+    .then((status) => {
+      expect(status, "HEAD auth/token/alive status of the cached session").to.eq(200);
+      return cy.wrap(null, { log: false });
+    });
 }
 
 /**
- * Logs out via the sidebar (auth.service.ts:425-538). Tracked test data is removed first, because
- * the BFF revokes the token on logout and API cleanup would no longer be possible. Only the current
- * session is cleared; cached sessions of other roles stay.
+ * Logs out via the sidebar (WC auth.service.ts:425-538) and waits for the BFF to confirm it (204,
+ * bff users.js:190-204; the webclient swallows a failed logout call). Tracked test data is removed
+ * first, because the BFF revokes the token on logout and API cleanup would no longer be possible.
+ * Browser state is left as the app leaves it, so logout tests check the app and not Cypress; the
+ * next test starts clean (test isolation) and validateSession() re-creates the revoked cached session.
  */
 export function logout(): Done {
   cleanup.runAll();
   interceptCommon();
   Navigation.clickLogout();
-  cy.wait(`@${aliases.logout}`);
+  // Assert status only: the request carries the Bearer token, keep it out of the log.
+  cy.wait(`@${aliases.logout}`, { log: false }).then(({ response }) => {
+    expect(response?.statusCode, "POST users/logout status").to.eq(204);
+  });
   cy.location("pathname").should("eq", "/auth/login");
-  return cy.then(() => Cypress.session.clearCurrentSessionData()).then(() => cy.wrap(null, { log: false }));
+  return done();
+}
+
+/**
+ * Logged in = the app shell is rendered (not on /auth, navbar avatar present) and the stored access
+ * token is still accepted by the BFF. Never fails: yields false when any part is missing.
+ */
+export function isLoggedIn(): Cypress.Chainable<boolean> {
+  return cy.document({ log: false }).then((doc) => {
+    const onAuthPage = doc.location.pathname.startsWith("/auth");
+    const shellShown = doc.querySelector(selectors.nav.avatar) !== null;
+    if (onAuthPage || !shellShown) return cy.wrap(false, { log: false });
+    return findAccessToken().then((token) =>
+      token ? tokenAliveStatus(token).then((status) => status === 200) : cy.wrap(false, { log: false }),
+    );
+  });
+}
+
+/** Alias recording whether the last ensureLoggedIn() had to log in. */
+const LOGIN_PERFORMED = "loginPerformed";
+
+/** Logs in as `role` and opens the main page only when not logged in already; otherwise does nothing. */
+export function ensureLoggedIn(role: string): Done {
+  isLoggedIn().then((loggedIn) => {
+    if (loggedIn) {
+      cy.log("already logged in: skipping login");
+    } else {
+      cy.log(`not logged in: logging in as ${role}`);
+      login(role);
+      openDashboard();
+    }
+    cy.wrap(!loggedIn, { log: false }).as(LOGIN_PERFORMED, { type: "static" });
+  });
+  return done();
+}
+
+/** The last ensureLoggedIn() found a live session and did not log in again. */
+export function expectNoNewLogin(): Done {
+  cy.get<boolean>(`@${LOGIN_PERFORMED}`, { log: false }).then((performed) => {
+    expect(performed, "ensureLoggedIn() logged in again").to.eq(false);
+  });
+  return done();
+}
+
+/** Tokens remembered by rememberAuthTokens() (alias, log off: they are credentials). */
+const REMEMBERED_TOKENS = "rememberedAuthTokens";
+
+/**
+ * Remembers the current session's access + refresh token for checks after logout. The access token
+ * must be live now, so a later 401 can only come from the logout.
+ */
+export function rememberAuthTokens(): Done {
+  getAuthTokens().then((tokens) => {
+    tokenAliveStatus(tokens.access_token).then((status) => {
+      expect(status, "HEAD auth/token/alive status before logout").to.eq(200);
+    });
+    cy.wrap(tokens, { log: false }).as(REMEMBERED_TOKENS, { type: "static" });
+  });
+  return done();
+}
+
+function rememberedTokens(): Cypress.Chainable<AuthTokens> {
+  return cy.get<AuthTokens>(`@${REMEMBERED_TOKENS}`, { log: false });
+}
+
+/** Login page shown and the authenticated shell is not (guard IsAuthenticatedGuard, private-zone.guard.ts:14-16). */
+export function expectLoginPage(): Done {
+  cy.location("pathname").should("eq", "/auth/login");
+  cy.get(selectors.login.email).should("be.visible");
+  cy.get(selectors.nav.sidebar).should("not.exist");
+  cy.get(selectors.nav.avatar).should("not.exist");
+  return done();
+}
+
+/** The access token remembered before logout is no longer accepted by the BFF (revoked: 401). */
+export function expectTokenRejected(): Done {
+  rememberedTokens()
+    .then(({ access_token }) => tokenAliveStatus(access_token))
+    .then((status) => {
+      expect(status, "HEAD auth/token/alive status of the token used before logout").to.eq(401);
+    });
+  return done();
+}
+
+/**
+ * No session token is left in the browser: the app's AUTH_TOKEN entry is gone (WC auth.service.ts:688-690)
+ * and neither remembered token appears in any localStorage, sessionStorage or cookie value.
+ * The app keeps the city_shob key itself and its non-auth entries, which is not checked here.
+ */
+export function expectNoAuthDataInBrowser(): Done {
+  rememberedTokens().then((tokens) => {
+    readAppState().then((state) => {
+      // Boolean only: on failure the state object (with tokens) must not reach the log.
+      const present = Object.prototype.hasOwnProperty.call(state ?? {}, AUTH_SESSION_KEY);
+      expect(present, `${AUTH_SESSION_KEY} in localStorage "${APP_STORAGE_KEY}"`).to.eq(false);
+    });
+    const where: string[] = [];
+    const decode = (text: string): string => {
+      try {
+        return decodeURIComponent(text);
+      } catch {
+        return text; // a stray "%" is not URI-encoded data
+      }
+    };
+    const scan = (store: string, entries: Record<string, unknown>): void => {
+      Object.entries(entries).forEach(([key, value]) => {
+        const raw = typeof value === "string" ? value : JSON.stringify(value);
+        const texts = [raw, decode(raw)];
+        (Object.keys(tokens) as Array<keyof AuthTokens>).forEach((name) => {
+          if (texts.some((t) => t.includes(tokens[name]))) where.push(`${name} in ${store} "${key}"`);
+        });
+      });
+    };
+    cy.getAllLocalStorage({ log: false }).then((all) => Object.values(all).forEach((e) => scan("localStorage", e)));
+    cy.getAllSessionStorage({ log: false }).then((all) => Object.values(all).forEach((e) => scan("sessionStorage", e)));
+    cy.getAllCookies({ log: false }).then((cookies) => cookies.forEach((c) => scan("cookie", { [c.name]: c.value })));
+    // Only locations are reported, never the token values.
+    cy.then(() => expect(where, "auth tokens left in the browser").to.be.empty);
+  });
+  return done();
 }
 
 // ---------------------------------------------------------------- navigation
+
+/** Opens `path` by URL without waiting for the app shell (it may redirect, e.g. to the login page). */
+export function openProtectedPage(path: string): Done {
+  cy.visit(path);
+  return done();
+}
+
+/**
+ * Browser Back. Records where the history step lands (popstate) and fails unless it left /auth, so
+ * a following login-page check proves a redirect away from that page and not a no-op Back.
+ */
+export function goBack(): Done {
+  const landed: string[] = [];
+  cy.window({ log: false }).then((win) => {
+    win.addEventListener("popstate", () => landed.push(win.location.pathname), { once: true });
+  });
+  cy.go("back");
+  cy.then(() => {
+    expect(landed, "popstate fired on Back").to.have.length(1);
+    expect(landed[0], "Back left the /auth pages").not.to.match(/^\/auth/);
+  });
+  return done();
+}
 
 export function waitForAppReady(): Done {
   return Navigation.shouldBeReady().then(() => cy.wrap(null, { log: false }));
