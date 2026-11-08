@@ -2,20 +2,58 @@
 import type { Interception } from "cypress/types/net-stubbing";
 import type { HttpMethod, Layout, LayoutArea, Workspace } from "./types";
 
-/** localStorage key holding the whole webclient state (AUTH_TOKEN lives inside). */
+/** localStorage key holding the whole webclient state (local-storage.service.ts:9). */
 export const APP_STORAGE_KEY = "city_shob";
+/** Sub-key of APP_STORAGE_KEY holding the session tokens (webclient app_config.ts:467). */
+export const AUTH_SESSION_KEY = "AUTH_TOKEN";
 
 export const apiUrl = (path: string): string =>
   `${Cypress.expose("apiUrl") as string}/${path.replace(/^\//, "")}`;
 
-/** Access token of the current session from the app's localStorage, or null when logged out. */
-export function findAccessToken(): Cypress.Chainable<string | null> {
+export interface AuthTokens {
+  access_token: string;
+  refresh_token: string;
+}
+
+type AppState = Record<string, unknown> & { [AUTH_SESSION_KEY]?: Partial<AuthTokens> };
+
+/** Parsed APP_STORAGE_KEY of the app origin, or null when the key is absent. */
+export function readAppState(): Cypress.Chainable<AppState | null> {
   return cy.getAllLocalStorage({ log: false }).then((all) => {
     const origin = new URL(Cypress.config("baseUrl") as string).origin;
     const raw = all[origin]?.[APP_STORAGE_KEY];
-    const parsed: { AUTH_TOKEN?: { access_token?: string } } = typeof raw === "string" ? JSON.parse(raw) : {};
-    return cy.wrap<string | null>(parsed.AUTH_TOKEN?.access_token ?? null, { log: false });
+    return cy.wrap<AppState | null>(typeof raw === "string" ? (JSON.parse(raw) as AppState) : null, { log: false });
   });
+}
+
+/** Access token of the current session from the app's localStorage, or null when logged out. */
+export function findAccessToken(): Cypress.Chainable<string | null> {
+  return readAppState().then((state) => cy.wrap<string | null>(state?.[AUTH_SESSION_KEY]?.access_token ?? null, { log: false }));
+}
+
+/** Access + refresh token of the current session; fails when either is missing. */
+export function getAuthTokens(): Cypress.Chainable<AuthTokens> {
+  return readAppState().then((state) => {
+    const { access_token, refresh_token } = state?.[AUTH_SESSION_KEY] ?? {};
+    if (!access_token || !refresh_token) throw new Error(`No ${AUTH_SESSION_KEY} in localStorage "${APP_STORAGE_KEY}": log in first.`);
+    return cy.wrap<AuthTokens>({ access_token, refresh_token }, { log: false });
+  });
+}
+
+/**
+ * Status of HEAD auth/token/alive for `token`. The BFF looks the token up in its token store
+ * (bff auth/index.js:88-94): 200 while it is live, 401 once revoked or expired. Never fails on status.
+ */
+export function tokenAliveStatus(token: string): Cypress.Chainable<number> {
+  return cy
+    .request({
+      method: "HEAD",
+      url: apiUrl("auth/token/alive"),
+      headers: { Authorization: `Bearer ${token}` },
+      failOnStatusCode: false,
+      log: false,
+    })
+    .then((res) => cy.wrap(res.status, { log: false }));
 }
 
 /** Access token of the current session; fails when there is none. */
@@ -56,7 +94,7 @@ export const aliases = {
 
 export function interceptCommon(): Cypress.Chainable<null> {
   cy.intercept({ method: "POST", url: "**/api/v1/auth/token" }, { log: false }).as(aliases.login);
-  cy.intercept("POST", "**/api/v1/users/logout").as(aliases.logout);
+  cy.intercept({ method: "POST", url: "**/api/v1/users/logout" }, { log: false }).as(aliases.logout);
   cy.intercept("GET", "**/api/v1/users/settings*").as(aliases.settings);
   cy.intercept("GET", "**/api/v1/users/workspaces/*/layout").as(aliases.workspaceLayout);
   cy.intercept("PUT", "**/api/v1/users/workspaces/*/layout").as(aliases.saveLayout);
