@@ -4,7 +4,27 @@ import { Navigation } from "./pages/Navigation";
 import { WidgetWizard } from "./pages/WidgetWizard";
 import { WidgetArea, emptyAreaSelector, widgetAreaSelector } from "./pages/WidgetArea";
 import { confirmDialog } from "./pages/Ui";
+<<<<<<< Updated upstream
 import { aliases, createWorkspace, deleteWorkspace, interceptCommon, apiUrl, getAccessToken, waitForLayoutPersisted } from "./api";
+=======
+import * as selectors from "./selectors";
+import {
+  APP_STORAGE_KEY,
+  AUTH_SESSION_KEY,
+  aliases,
+  createWorkspace,
+  deleteWorkspace,
+  interceptCommon,
+  listWorkspaces,
+  findAccessToken,
+  getAccessToken,
+  getAuthTokens,
+  readAppState,
+  tokenAliveStatus,
+  waitForLayoutPersisted,
+} from "./api";
+import type { AuthTokens } from "./api";
+>>>>>>> Stashed changes
 import { cleanup } from "./cleanup";
 import { WIDGETS } from "./types";
 import type { Credentials, Done, Layout, WidgetConfig, WidgetHandle, WidgetSize, WidgetType, Workspace } from "./types";
@@ -106,6 +126,31 @@ export function logout(): Done {
   return cy.then(() => Cypress.session.clearCurrentSessionData()).then(() => cy.wrap(null, { log: false }));
 }
 
+/** Everything login.feature does, as one step: log in as `role`, open the main page, app ready. */
+export function loginAndOpenMainPage(role: string): Done {
+  login(role);
+  openDashboard();
+  return waitForAppReady();
+}
+
+/**
+ * Everything logout.feature checks, as one step: logout lands on the login page, the token used
+ * before logout is revoked, no auth token is left in the browser, browser Back and a protected page
+ * opened directly both end on the login page. logout() runs the tracked cleanup first.
+ */
+export function logoutAndVerifySessionClosed(): Done {
+  rememberAuthTokens();
+  logout();
+  expectLoginPage();
+  expectTokenRejected();
+  expectNoAuthDataInBrowser();
+  goBack();
+  expectLoginPage();
+  openProtectedPage("/dashboard");
+  expectLoginPage();
+  return done();
+}
+
 // ---------------------------------------------------------------- navigation
 
 export function waitForAppReady(): Done {
@@ -175,8 +220,40 @@ export function openTempWorkspaceWith(type: WidgetType): Cypress.Chainable<Works
   });
 }
 
-/** Creates a throwaway workspace via the BFF and tracks it for cleanup. Does not open it. */
+/** Temp workspace names: `e2e-<epoch ms>` or `e2e-<word>-<epoch ms>` (e.g. e2e-events-...). */
+const TEMP_WORKSPACE_NAME = /^e2e-(?:[a-z]+-)?(\d{13})$/;
+/** Older than any single test: a younger one may belong to a run still in progress. */
+const STALE_TEMP_WORKSPACE_MS = 10 * 60 * 1000;
+
+/**
+ * Deletes temp workspaces left by earlier runs that failed before their cleanup could run (e.g. the
+ * session was revoked mid-test, so the API delete had no token). Only names made by
+ * createTempWorkspace() and older than STALE_TEMP_WORKSPACE_MS are touched. Never fails the test.
+ */
+export function sweepStaleTempWorkspaces(): Done {
+  listWorkspaces().then((workspaces) => {
+    const now = Date.now();
+    workspaces
+      .filter((ws) => {
+        const created = Number(TEMP_WORKSPACE_NAME.exec(ws.name)?.[1]);
+        return created > 0 && now - created > STALE_TEMP_WORKSPACE_MS;
+      })
+      .forEach((ws) => {
+        cy.log(`sweep stale temp workspace ${ws.name}`);
+        deleteWorkspace(ws.id).then((problem) => {
+          if (problem) cy.log(`sweep ${ws.name}: ${problem}`);
+        });
+      });
+  });
+  return done();
+}
+
+/**
+ * Creates a throwaway workspace via the BFF and tracks it for cleanup. Does not open it. Leftovers
+ * of earlier failed runs are swept first.
+ */
 export function createTempWorkspace(name = `e2e-${Date.now()}`, layout: Layout = EMPTY_LAYOUT): Cypress.Chainable<Workspace> {
+  sweepStaleTempWorkspaces();
   return createWorkspace(name, layout).then((ws) => {
     cleanup.track("workspace", ws.id);
     return ws;

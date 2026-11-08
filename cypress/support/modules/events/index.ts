@@ -13,6 +13,21 @@ export {
   handle,
   unhandle,
   waitForRealtimeEvent,
+  createEventWorkspace,
+  openEventWorkspace,
+  backToDashboard,
+  openCreateEvent,
+  chooseFirstEventType,
+  chooseFirstPriority,
+  chooseFirstSeverity,
+  chooseFirstTraffic,
+  chooseFirstStatus,
+  chooseFirstDirection,
+  chooseFirstRegion,
+  setEventLocation,
+  saveEvent,
+  createdEventShouldBeInTable,
 } from "./actions";
+export { EventCreate } from "./pages/EventCreate";
 export { EventsTable } from "./pages/EventsTable";
 export { EventDetails } from "./pages/EventDetails";

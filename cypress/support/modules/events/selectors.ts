@@ -22,6 +22,34 @@ export const table = {
   filterReset: testId("filter-reset-btn"),
 } as const;
 
+/**
+ * Create-event wizard: p-sidebar .event-create-modal mounted globally (root-layout.component.html:28,
+ * events-create.component.html:1-12). Scoped to the modal: app-event-details reuses the same test ids.
+ */
+const createModal = ".event-create-modal";
+export const create = {
+  open: testId("btn-navbar-create-event"),
+  /** p-sidebar host (0x0 box, removed on close by *ngIf); the visible panel is `panel`. */
+  modal: createModal, // TODO(testid) event-create-modal
+  panel: `${createModal} .p-sidebar`,
+  typeInput: `${createModal} ${testId("event-type-picker")} input.search-input`, // TODO(testid) event-type-search
+  typeList: `${createModal} ${testId("event-type-picker")} .event-types-container`,
+  typeLeaf: ".selectable-item", // TODO(testid) event-type-item
+  priority: `${createModal} ${testId("priority-picker")} .p-dropdown`, // TODO(testid) priority-picker-dropdown (objectMode only today)
+  severity: `${createModal} ${testId("severity-picker-wrapper")} .p-dropdown`,
+  /** Radio group, required when the trafficField flag is on (event-traffic-picker.component.html). */
+  trafficOption: `${createModal} app-event-traffic-picker label.traffic-radio-option`, // TODO(testid) traffic-option-<id>
+  /** Wizard header, required when the NotificationStatus flag is on (events-create.component.html:25). */
+  status: `${createModal} app-event-notifstatus-picker .p-dropdown`, // TODO(testid) notif-status-picker
+  /** "Up/down" road direction, required when the CustomerDirectionLong flag is on (event-directions-picker). */
+  directionUpDown: `${createModal} ${testId("event-directions-picker")}[automationid="UDUD"] .p-dropdown`,
+  /** Merhav (region), shown when the merhav flag is on (event-location-v2.component.html:52-68). */
+  region: `${createModal} ${testId("region-picker")} .p-dropdown`,
+  lat: `${createModal} input#lat`, // TODO(testid) event-location-lat
+  lng: `${createModal} input#lng`, // TODO(testid) event-location-lng
+  save: `${createModal} ${testId("btn-save-event")}`,
+} as const;
+
 /** Event details p-sidebar (events/components/event-details, mounted in root-layout). */
 export const details = {
   panel: ".event-details-modal", // TODO(testid) event-details-panel

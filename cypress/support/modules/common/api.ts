@@ -123,6 +123,11 @@ export function createWorkspace(name: string, layout: Layout): Cypress.Chainable
   });
 }
 
+/** GET users/workspaces: the user's non-virtual workspaces (BFF controllers/workspaces.js:45-51). */
+export function listWorkspaces(): Cypress.Chainable<Workspace[]> {
+  return bffRequest<Workspace[]>("GET", "users/workspaces").its("body");
+}
+
 /**
  * Deletes a workspace and its layout (BFF workspaces.js:158-170, layouts.js:181-189). Helpers that
  * save a layout already waited for the debounced write (waitForLayoutPersisted). Never throws:

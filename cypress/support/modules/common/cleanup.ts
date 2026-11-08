@@ -49,7 +49,8 @@ export const cleanup = {
       });
     });
     return cy.then(() => {
-      expect(failures, "cleanup failures").to.be.empty;
+      // The list goes into the message: chai prints a long array as "[ Array(n) ]".
+      expect(failures, `cleanup failures: ${failures.join(" | ")}`).to.be.empty;
       return cy.wrap(null, { log: false });
     });
   },

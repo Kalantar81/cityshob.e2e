@@ -1,13 +1,36 @@
 /** Public API of the common module. Import from "@common". */
 export * from "./types";
 export * as selectors from "./selectors";
+<<<<<<< Updated upstream
 export { APP_STORAGE_KEY, bffRequest, findAccessToken, getAccessToken, apiUrl, aliases, interceptCommon, createWorkspace, deleteWorkspace, waitForLayoutPersisted } from "./api";
+=======
+export {
+  APP_STORAGE_KEY,
+  AUTH_SESSION_KEY,
+  bffRequest,
+  readAppState,
+  findAccessToken,
+  getAccessToken,
+  getAuthTokens,
+  tokenAliveStatus,
+  apiUrl,
+  aliases,
+  interceptCommon,
+  createWorkspace,
+  deleteWorkspace,
+  listWorkspaces,
+  waitForLayoutPersisted,
+} from "./api";
+export type { AuthTokens } from "./api";
+>>>>>>> Stashed changes
 export type { Remover } from "./cleanup";
 export { cleanup } from "./cleanup";
 export * from "./primeng";
 export {
   getCredentials,
   login,
+  loginAndOpenMainPage,
+  logoutAndVerifySessionClosed,
   validateSession,
   logout,
   waitForAppReady,
@@ -18,6 +41,7 @@ export {
   widgetLayout,
   openTempWorkspaceWith,
   createTempWorkspace,
+  sweepStaleTempWorkspaces,
   createWidget,
   findWidget,
   editWidget,

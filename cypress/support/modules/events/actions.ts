@@ -1,10 +1,11 @@
 /// <reference types="cypress" />
-import { openWorkspace } from "@common";
+import { cleanup, createTempWorkspace, createWidget, openDashboard, openWorkspace, openWorkspaceById, toast } from "@common";
 import type { Done } from "@common";
 import { EventsTable } from "./pages/EventsTable";
 import { EventDetails } from "./pages/EventDetails";
+import { EventCreate } from "./pages/EventCreate";
 import { eventsAliases, interceptEvents } from "./api";
-import { table } from "./selectors";
+import { create, table } from "./selectors";
 import type { EventColumn, SortDirection } from "./types";
 
 const done = (): Done => cy.wrap(null, { log: false });
@@ -66,6 +67,110 @@ export function sortBy(column: EventColumn, dir: SortDirection): Done {
     }
   });
   EventsTable.header(column).should("have.attr", "aria-sort", want);
+  return done();
+}
+
+// ---------------------------------------------------------------- event workspace + create wizard
+
+/** Aliases (static) shared between the steps of one scenario. */
+const EVENT_WORKSPACE = "eventWorkspaceId";
+const CREATED_EVENT = "createdEventId";
+
+/**
+ * Throwaway workspace (BFF, tracked for cleanup) with an Events table widget added through the UI,
+ * opened and loaded. Dashboard (/dashboard) holds no widgets, so the widget lives in a workspace.
+ */
+export function createEventWorkspace(): Done {
+  createTempWorkspace(`e2e-events-${Date.now()}`).then((ws) => {
+    cy.wrap(ws.id, { log: false }).as(EVENT_WORKSPACE, { type: "static" });
+    openWorkspaceById(ws.id);
+  });
+  createWidget("events_table", {});
+  return eventsTableShouldBeLoaded();
+}
+
+/** Re-opens the workspace made by createEventWorkspace(). */
+export function openEventWorkspace(): Done {
+  return cy.get<string>(`@${EVENT_WORKSPACE}`, { log: false }).then((id) => openWorkspaceById(id));
+}
+
+export function backToDashboard(): Done {
+  return openDashboard();
+}
+
+/** Navbar "create event" (navbar.component.html:114-122); needs the Events+Create permission. */
+export function openCreateEvent(): Done {
+  EventCreate.open();
+  return done();
+}
+
+export function chooseFirstEventType(): Done {
+  EventCreate.chooseFirstType();
+  return done();
+}
+
+export function chooseFirstPriority(): Done {
+  EventCreate.chooseFirstPriority();
+  return done();
+}
+
+export function chooseFirstSeverity(): Done {
+  EventCreate.chooseFirstSeverity();
+  return done();
+}
+
+export function chooseFirstStatus(): Done {
+  EventCreate.chooseFirstStatus();
+  return done();
+}
+
+export function chooseFirstDirection(): Done {
+  EventCreate.chooseFirstDirection();
+  return done();
+}
+
+export function chooseFirstRegion(): Done {
+  EventCreate.chooseFirstRegion();
+  return done();
+}
+
+export function chooseFirstTraffic(): Done {
+  EventCreate.chooseFirstTraffic();
+  return done();
+}
+
+export function setEventLocation(lat: number, lng: number): Done {
+  EventCreate.setLocation(lat, lng);
+  return done();
+}
+
+/**
+ * Saves the wizard and waits for POST events. The new EventID (response body, event-wizard.service.ts:
+ * 1024-1031) is tracked for cleanup (closed: there is no DELETE) and remembered for later steps.
+ * On success the app shows a success toast and closes the wizard (events-create.component.ts:894-895).
+ */
+export function saveEvent(): Done {
+  interceptEvents();
+  EventCreate.save();
+  cy.wait(`@${eventsAliases.create}`, { timeout: 30000 }).then(({ response }) => {
+    expect(response?.statusCode, "POST events status").to.be.lessThan(400);
+    const body = (response?.body ?? {}) as { success?: boolean; EventID?: string | number };
+    expect(body.success, "POST events success").not.to.eq(false);
+    expect(body.EventID, "created EventID").to.exist;
+    const id = String(body.EventID);
+    cleanup.track("event", id);
+    cy.wrap(id, { log: false }).as(CREATED_EVENT, { type: "static" });
+  });
+  toast.shouldShow("success");
+  cy.get(create.modal).should("not.exist");
+  return done();
+}
+
+/** The saved event reaches the table over WS (refreshEventTable) and is inserted as the first row. */
+export function createdEventShouldBeInTable(timeout = 30000): Done {
+  cy.get<string>(`@${CREATED_EVENT}`, { log: false }).then((id) => {
+    cy.get(table.row(id), { timeout }).should("be.visible");
+  });
   return done();
 }
 
