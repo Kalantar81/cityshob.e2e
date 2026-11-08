@@ -1,9 +1,6 @@
 /** Public API of the common module. Import from "@common". */
 export * from "./types";
 export * as selectors from "./selectors";
-<<<<<<< Updated upstream
-export { APP_STORAGE_KEY, bffRequest, findAccessToken, getAccessToken, apiUrl, aliases, interceptCommon, createWorkspace, deleteWorkspace, waitForLayoutPersisted } from "./api";
-=======
 export {
   APP_STORAGE_KEY,
   AUTH_SESSION_KEY,
@@ -22,7 +19,6 @@ export {
   waitForLayoutPersisted,
 } from "./api";
 export type { AuthTokens } from "./api";
->>>>>>> Stashed changes
 export type { Remover } from "./cleanup";
 export { cleanup } from "./cleanup";
 export * from "./primeng";
@@ -33,6 +29,15 @@ export {
   logoutAndVerifySessionClosed,
   validateSession,
   logout,
+  isLoggedIn,
+  ensureLoggedIn,
+  expectNoNewLogin,
+  rememberAuthTokens,
+  expectLoginPage,
+  expectTokenRejected,
+  expectNoAuthDataInBrowser,
+  openProtectedPage,
+  goBack,
   waitForAppReady,
   openDashboard,
   openWorkspace,
